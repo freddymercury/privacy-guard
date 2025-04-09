@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title %></title>
+    <style>
+      :root {
+        --primary-color: #3498db;
+        --secondary-color: #2c3e50;
+        --success-color: #2ecc71;
+        --warning-color: #f39c12;
+        --danger-color: #e74c3c;
+        --light-color: #ecf0f1;
+        --dark-color: #34495e;
+        --gray-color: #95a5a6;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f5f5f5;
+        color: #333;
+        line-height: 1.6;
+      }
+
+      .container {
+        display: flex;
+        min-height: 100vh;
+      }
+
+      /* Sidebar */
+      .sidebar {
+        width: 250px;
+        background-color: var(--secondary-color);
+        color: white;
+        padding: 20px 0;
+        position: fixed;
+        height: 100vh;
+        overflow-y: auto;
+      }
+
+      .sidebar-header {
+        padding: 0 20px 20px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        text-align: center;
+      }
+
+      .sidebar-header h1 {
+        font-size: 1.5rem;
+        margin-bottom: 5px;
+      }
+
+      .sidebar-header p {
+        font-size: 0.8rem;
+        opacity: 0.7;
+      }
+
+      .sidebar-menu {
+        padding: 20px 0;
+      }
+
+      .menu-item {
+        padding: 10px 20px;
+        display: block;
+        color: white;
+        text-decoration: none;
+        transition: background-color 0.2s;
+      }
+
+      .menu-item:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+      }
+
+      .menu-item.active {
+        background-color: var(--primary-color);
+        border-left: 4px solid white;
+      }
+
+      .sidebar-footer {
+        padding: 20px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        font-size: 0.8rem;
+        text-align: center;
+        position: absolute;
+        bottom: 0;
+        width: 100%;
+      }
+
+      /* Main Content */
+      .main-content {
+        flex: 1;
+        margin-left: 250px;
+        padding: 20px;
+      }
+
+      .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #ddd;
+      }
+
+      .page-title {
+        font-size: 1.8rem;
+        color: var(--secondary-color);
+      }
+
+      .user-info {
+        display: flex;
+        align-items: center;
+      }
+
+      .user-name {
+        margin-right: 10px;
+      }
+
+      .logout-btn {
+        background-color: transparent;
+        border: none;
+        color: var(--primary-color);
+        cursor: pointer;
+        text-decoration: underline;
+      }
+
+      /* Tables */
+      .table-container {
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+        margin-bottom: 30px;
+        overflow-x: auto;
+      }
+
+      .table-header {
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #eee;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .table-title {
+        font-size: 1.2rem;
+        color: var(--secondary-color);
+      }
+
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .table th,
+      .table td {
+        padding: 12px 15px;
+        text-align: left;
+        border-bottom: 1px solid #eee;
+      }
+
+      .table th {
+        background-color: #f8f9fa;
+        font-weight: 600;
+        color: var(--secondary-color);
+      }
+
+      .table tbody tr:hover {
+        background-color: #f8f9fa;
+      }
+
+      /* Buttons */
+      .btn {
+        display: inline-block;
+        padding: 8px 16px;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        font-weight: 500;
+        cursor: pointer;
+        text-decoration: none;
+        transition: background-color 0.2s;
+        border: none;
+      }
+
+      .btn-primary {
+        background-color: var(--primary-color);
+        color: white;
+      }
+
+      .btn-primary:hover {
+        background-color: #2980b9;
+      }
+
+      .btn-secondary {
+        background-color: var(--light-color);
+        color: var(--dark-color);
+      }
+
+      .btn-secondary:hover {
+        background-color: #bdc3c7;
+      }
+
+      .btn-success {
+        background-color: var(--success-color);
+        color: white;
+      }
+
+      .btn-success:hover {
+        background-color: #27ae60;
+      }
+
+      .btn-danger {
+        background-color: var(--danger-color);
+        color: white;
+      }
+
+      .btn-danger:hover {
+        background-color: #c0392b;
+      }
+
+      .btn-sm {
+        padding: 4px 8px;
+        font-size: 0.8rem;
+      }
+
+      /* Action buttons */
+      .action-buttons {
+        display: flex;
+        gap: 5px;
+      }
+
+      /* Modal */
+      .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+      }
+
+      .modal-content {
+        background-color: white;
+        margin: 10% auto;
+        padding: 20px;
+        border-radius: 8px;
+        width: 50%;
+        max-width: 500px;
+      }
+
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #eee;
+      }
+
+      .modal-title {
+        font-size: 1.2rem;
+        color: var(--secondary-color);
+      }
+
+      .close {
+        color: #aaa;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+      }
+
+      .close:hover {
+        color: black;
+      }
+
+      .modal-body {
+        margin-bottom: 15px;
+      }
+
+      .form-group {
+        margin-bottom: 15px;
+      }
+
+      .form-label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 500;
+        color: var(--secondary-color);
+      }
+
+      .form-input {
+        width: 100%;
+        padding: 8px 12px;
+        border-radius: 4px;
+        border: 1px solid #ddd;
+        font-size: 0.9rem;
+      }
+
+      .form-select {
+        width: 100%;
+        padding: 8px 12px;
+        border-radius: 4px;
+        border: 1px solid #ddd;
+        font-size: 0.9rem;
+        background-color: white;
+      }
+
+      .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+      }
+
+      /* Badge */
+      .badge {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: white;
+      }
+
+      .badge-admin {
+        background-color: var(--danger-color);
+      }
+
+      .badge-user {
+        background-color: var(--primary-color);
+      }
+
+      /* Responsive */
+      @media (max-width: 768px) {
+        .container {
+          flex-direction: column;
+        }
+
+        .sidebar {
+          width: 100%;
+          height: auto;
+          position: relative;
+        }
+
+        .sidebar-footer {
+          position: relative;
+        }
+
+        .main-content {
+          margin-left: 0;
+        }
+
+        .modal-content {
+          width: 90%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <h1>PrivacyGuard</h1>
+          <p>Admin Dashboard</p>
+        </div>
+
+        <div class="sidebar-menu">
+          <a href="/admin" class="menu-item">Dashboard</a>
+          <a href="/admin/assessments" class="menu-item">Assessments</a>
+          <a href="/admin/unassessed" class="menu-item">Unassessed URLs</a>
+          <a href="/admin/analytics" class="menu-item">Analytics</a>
+          <a href="/admin/users" class="menu-item active">Users</a>
+          <a href="/admin/audit-logs" class="menu-item">Audit Logs</a>
+        </div>
+
+        <div class="sidebar-footer">
+          &copy; <%= new Date().getFullYear() %> PrivacyGuard
+        </div>
+      </div>
+
+      <!-- Main Content -->
+      <div class="main-content">
+        <div class="page-header">
+          <h1 class="page-title">Users</h1>
+
+          <div class="user-info">
+            <span class="user-name">Welcome, <%= user.name %></span>
+            <a href="/admin/logout" class="logout-btn">Logout</a>
+          </div>
+        </div>
+
+        <!-- Users Table -->
+        <div class="table-container">
+          <div class="table-header">
+            <h2 class="table-title">User Management</h2>
+            <button id="add-user-btn" class="btn btn-primary">Add User</button>
+          </div>
+
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Name</th>
+                <th>Role</th>
+                <th>Created</th>
+                <th>Last Updated</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (users && users.length > 0) { %> <%
+              users.forEach(function(userItem) { %>
+              <tr>
+                <td><%= userItem.username %></td>
+                <td><%= userItem.name %></td>
+                <td>
+                  <span class="badge badge-<%= userItem.role %>">
+                    <%= userItem.role %>
+                  </span>
+                </td>
+                <td><%= new Date(userItem.created_at).toLocaleString() %></td>
+                <td><%= new Date(userItem.updated_at).toLocaleString() %></td>
+                <td class="action-buttons">
+                  <button
+                    class="btn btn-secondary btn-sm edit-user-btn"
+                    data-id="<%= userItem.id %>"
+                    data-username="<%= userItem.username %>"
+                    data-name="<%= userItem.name %>"
+                    data-role="<%= userItem.role %>"
+                  >
+                    Edit
+                  </button>
+                  <% if (userItem.id !== user.id) { %>
+                  <button
+                    class="btn btn-danger btn-sm delete-user-btn"
+                    data-id="<%= userItem.id %>"
+                    data-username="<%= userItem.username %>"
+                  >
+                    Delete
+                  </button>
+                  <% } %>
+                </td>
+              </tr>
+              <% }); %> <% } else { %>
+              <tr>
+                <td colspan="6" style="text-align: center">No users found</td>
+              </tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add User Modal -->
+    <div id="add-user-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title">Add User</h2>
+          <span class="close">&times;</span>
+        </div>
+        <div class="modal-body">
+          <form id="add-user-form">
+            <div class="form-group">
+              <label class="form-label" for="add-username">Username</label>
+              <input
+                type="text"
+                id="add-username"
+                class="form-input"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="add-name">Name</label>
+              <input type="text" id="add-name" class="form-input" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="add-password">Password</label>
+              <input
+                type="password"
+                id="add-password"
+                class="form-input"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="add-role">Role</label>
+              <select id="add-role" class="form-select">
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="cancel-add">Cancel</button>
+          <button class="btn btn-primary" id="confirm-add">Add User</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit User Modal -->
+    <div id="edit-user-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title">Edit User</h2>
+          <span class="close">&times;</span>
+        </div>
+        <div class="modal-body">
+          <form id="edit-user-form">
+            <input type="hidden" id="edit-id" />
+            <div class="form-group">
+              <label class="form-label" for="edit-username">Username</label>
+              <input
+                type="text"
+                id="edit-username"
+                class="form-input"
+                disabled
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="edit-name">Name</label>
+              <input type="text" id="edit-name" class="form-input" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="edit-password"
+                >Password (leave blank to keep current)</label
+              >
+              <input type="password" id="edit-password" class="form-input" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="edit-role">Role</label>
+              <select id="edit-role" class="form-select">
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="cancel-edit">Cancel</button>
+          <button class="btn btn-primary" id="confirm-edit">Update User</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete User Modal -->
+    <div id="delete-user-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title">Delete User</h2>
+          <span class="close">&times;</span>
+        </div>
+        <div class="modal-body">
+          <p>Are you sure you want to delete this user?</p>
+          <p id="delete-username"></p>
+          <input type="hidden" id="delete-id" />
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="cancel-delete">Cancel</button>
+          <button class="btn btn-danger" id="confirm-delete">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        // Add User
+        var addUserModal = document.getElementById("add-user-modal");
+        var addUserBtn = document.getElementById("add-user-btn");
+        var cancelAddBtn = document.getElementById("cancel-add");
+        var confirmAddBtn = document.getElementById("confirm-add");
+
+        addUserBtn.addEventListener("click", function () {
+          addUserModal.style.display = "block";
+        });
+
+        cancelAddBtn.addEventListener("click", function () {
+          addUserModal.style.display = "none";
+          document.getElementById("add-user-form").reset();
+        });
+
+        confirmAddBtn.addEventListener("click", function () {
+          var username = document.getElementById("add-username").value;
+          var name = document.getElementById("add-name").value;
+          var password = document.getElementById("add-password").value;
+          var role = document.getElementById("add-role").value;
+
+          if (!username || !password) {
+            alert("Username and password are required");
+            return;
+          }
+
+          fetch("/admin/users", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              username: username,
+              name: name,
+              password: password,
+              role: role,
+            }),
+          })
+            .then(function (response) {
+              return response.json();
+            })
+            .then(function (data) {
+              if (data.status === "success") {
+                window.location.reload();
+              } else {
+                alert("Error: " + data.message);
+              }
+            })
+            .catch(function (error) {
+              console.error("Error:", error);
+              alert("An error occurred while creating the user");
+            });
+
+          addUserModal.style.display = "none";
+        });
+
+        // Edit User
+        var editUserModal = document.getElementById("edit-user-modal");
+        var editUserBtns = document.querySelectorAll(".edit-user-btn");
+        var cancelEditBtn = document.getElementById("cancel-edit");
+        var confirmEditBtn = document.getElementById("confirm-edit");
+
+        editUserBtns.forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            var id = this.getAttribute("data-id");
+            var username = this.getAttribute("data-username");
+            var name = this.getAttribute("data-name");
+            var role = this.getAttribute("data-role");
+
+            document.getElementById("edit-id").value = id;
+            document.getElementById("edit-username").value = username;
+            document.getElementById("edit-name").value = name;
+            document.getElementById("edit-role").value = role;
+            document.getElementById("edit-password").value = "";
+
+            editUserModal.style.display = "block";
+          });
+        });
+
+        cancelEditBtn.addEventListener("click", function () {
+          editUserModal.style.display = "none";
+        });
+
+        confirmEditBtn.addEventListener("click", function () {
+          var id = document.getElementById("edit-id").value;
+          var name = document.getElementById("edit-name").value;
+          var password = document.getElementById("edit-password").value;
+          var role = document.getElementById("edit-role").value;
+
+          var updateData = { name: name, role: role };
+          if (password) {
+            updateData.password = password;
+          }
+
+          fetch("/admin/users/" + id, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(updateData),
+          })
+            .then(function (response) {
+              return response.json();
+            })
+            .then(function (data) {
+              if (data.status === "success") {
+                window.location.reload();
+              } else {
+                alert("Error: " + data.message);
+              }
+            })
+            .catch(function (error) {
+              console.error("Error:", error);
+              alert("An error occurred while updating the user");
+            });
+
+          editUserModal.style.display = "none";
+        });
+
+        // Delete User
+        var deleteUserModal = document.getElementById("delete-user-modal");
+        var deleteUserBtns = document.querySelectorAll(".delete-user-btn");
+        var cancelDeleteBtn = document.getElementById("cancel-delete");
+        var confirmDeleteBtn = document.getElementById("confirm-delete");
+
+        deleteUserBtns.forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            var id = this.getAttribute("data-id");
+            var username = this.getAttribute("data-username");
+
+            document.getElementById("delete-id").value = id;
+            document.getElementById("delete-username").textContent = username;
+
+            deleteUserModal.style.display = "block";
+          });
+        });
+
+        cancelDeleteBtn.addEventListener("click", function () {
+          deleteUserModal.style.display = "none";
+        });
+
+        confirmDeleteBtn.addEventListener("click", function () {
+          var id = document.getElementById("delete-id").value;
+
+          fetch("/admin/users/" + id, {
+            method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          })
+            .then(function (response) {
+              return response.json();
+            })
+            .then(function (data) {
+              if (data.status === "success") {
+                window.location.reload();
+              } else {
+                alert("Error: " + data.message);
+              }
+            })
+            .catch(function (error) {
+              console.error("Error:", error);
+              alert("An error occurred while deleting the user");
+            });
+
+          deleteUserModal.style.display = "none";
+        });
+
+        // Close modals when clicking on X or outside
+        document.querySelectorAll(".close").forEach(function (closeBtn) {
+          closeBtn.addEventListener("click", function () {
+            document.querySelectorAll(".modal").forEach(function (modal) {
+              modal.style.display = "none";
+            });
+          });
+        });
+
+        window.addEventListener("click", function (event) {
+          document.querySelectorAll(".modal").forEach(function (modal) {
+            if (event.target === modal) {
+              modal.style.display = "none";
+            }
+          });
+        });
+      });
+    </script>
+  </body>
+</html>

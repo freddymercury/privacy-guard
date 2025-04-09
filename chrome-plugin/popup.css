@@ -1,0 +1,231 @@
+/* PrivacyGuard Popup Styles */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+  width: 320px;
+  background-color: #f5f5f5;
+  color: #333;
+}
+
+.container {
+  padding: 15px;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #ddd;
+}
+
+h1 {
+  font-size: 20px;
+  color: #2c3e50;
+}
+
+h2 {
+  font-size: 16px;
+  margin-bottom: 8px;
+  color: #2c3e50;
+}
+
+.content {
+  margin-bottom: 15px;
+}
+
+.url-display {
+  margin-bottom: 15px;
+  word-break: break-all;
+}
+
+#current-url {
+  font-size: 14px;
+  padding: 5px;
+  background-color: #fff;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+}
+
+.assessment {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.indicator {
+  margin: 10px 0;
+}
+
+#risk-indicator {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 24px;
+  font-weight: bold;
+  color: white;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+#risk-indicator.high {
+  background-color: #e74c3c;
+  content: "!";
+}
+
+#risk-indicator.medium {
+  background-color: #f39c12;
+  content: "!";
+}
+
+#risk-indicator.low {
+  background-color: #2ecc71;
+  content: "✓";
+}
+
+#risk-indicator.unknown {
+  background-color: #95a5a6;
+  content: "?";
+}
+
+#risk-text {
+  text-align: center;
+  font-weight: bold;
+}
+
+.details {
+  margin-top: 15px;
+  font-size: 14px;
+}
+
+.details h3 {
+  font-size: 15px;
+  margin: 10px 0 5px;
+}
+
+.details ul {
+  padding-left: 20px;
+}
+
+.settings {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 10px;
+  border-top: 1px solid #ddd;
+}
+
+#refresh-btn {
+  padding: 8px 12px;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+#refresh-btn:hover {
+  background-color: #2980b9;
+}
+
+.toggle-container {
+  display: flex;
+  align-items: center;
+}
+
+.toggle-container label {
+  margin-right: 8px;
+  font-size: 14px;
+}
+
+/* Toggle Switch */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 20px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.4s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  transition: 0.4s;
+}
+
+input:checked + .slider {
+  background-color: #2196f3;
+}
+
+input:focus + .slider {
+  box-shadow: 0 0 1px #2196f3;
+}
+
+input:checked + .slider:before {
+  transform: translateX(20px);
+}
+
+.slider.round {
+  border-radius: 20px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
+}
+
+/* Risk category styles */
+.risk-category {
+  margin-bottom: 8px;
+  padding: 5px;
+  border-radius: 4px;
+}
+
+.risk-high {
+  background-color: rgba(231, 76, 60, 0.1);
+  border-left: 3px solid #e74c3c;
+}
+
+.risk-medium {
+  background-color: rgba(243, 156, 18, 0.1);
+  border-left: 3px solid #f39c12;
+}
+
+.risk-low {
+  background-color: rgba(46, 204, 113, 0.1);
+  border-left: 3px solid #2ecc71;
+}
+
+.risk-unknown {
+  background-color: rgba(149, 165, 166, 0.1);
+  border-left: 3px solid #95a5a6;
+}

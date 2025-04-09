@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title %></title>
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f5f5f5;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+      }
+
+      .error-container {
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        padding: 2rem;
+        width: 100%;
+        max-width: 600px;
+        margin: 2rem;
+      }
+
+      .header {
+        text-align: center;
+        margin-bottom: 2rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid #eee;
+      }
+
+      .header h1 {
+        color: #e74c3c;
+        margin-bottom: 0.5rem;
+      }
+
+      .error-message {
+        background-color: #f8d7da;
+        color: #721c24;
+        padding: 1rem;
+        border-radius: 4px;
+        margin-bottom: 1.5rem;
+      }
+
+      .error-details {
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-radius: 4px;
+        margin-bottom: 1.5rem;
+        overflow-x: auto;
+      }
+
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+      }
+
+      .actions {
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+        margin-top: 2rem;
+      }
+
+      .btn {
+        display: inline-block;
+        padding: 0.75rem 1.5rem;
+        border-radius: 4px;
+        text-decoration: none;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+
+      .btn-primary {
+        background-color: #3498db;
+        color: white;
+        border: none;
+      }
+
+      .btn-primary:hover {
+        background-color: #2980b9;
+      }
+
+      .btn-secondary {
+        background-color: #ecf0f1;
+        color: #2c3e50;
+        border: none;
+      }
+
+      .btn-secondary:hover {
+        background-color: #bdc3c7;
+      }
+
+      .footer {
+        text-align: center;
+        margin-top: 2rem;
+        color: #7f8c8d;
+        font-size: 0.875rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="error-container">
+      <div class="header">
+        <h1>Error</h1>
+      </div>
+
+      <div class="error-message">
+        <strong><%= message %></strong>
+      </div>
+
+      <% if (error && Object.keys(error).length > 0) { %>
+      <div class="error-details">
+        <h3>Error Details:</h3>
+        <pre><%= JSON.stringify(error, null, 2) %></pre>
+      </div>
+      <% } %>
+
+      <div class="actions">
+        <a href="javascript:history.back()" class="btn btn-secondary"
+          >Go Back</a
+        >
+        <a href="/admin" class="btn btn-primary">Dashboard Home</a>
+      </div>
+
+      <div class="footer">
+        &copy; <%= new Date().getFullYear() %> PrivacyGuard. All rights
+        reserved.
+      </div>
+    </div>
+  </body>
+</html>

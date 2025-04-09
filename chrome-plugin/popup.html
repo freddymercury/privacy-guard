@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PrivacyGuard</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>PrivacyGuard</h1>
+      </header>
+
+      <div class="content">
+        <div class="url-display">
+          <h2>Current Website</h2>
+          <p id="current-url">Loading...</p>
+        </div>
+
+        <div class="assessment">
+          <h2>Privacy Assessment</h2>
+          <div class="indicator">
+            <div id="risk-indicator" class="unknown">?</div>
+          </div>
+          <p id="risk-text">Checking privacy status...</p>
+        </div>
+
+        <div class="details" id="assessment-details">
+          <!-- Assessment details will be populated here -->
+        </div>
+      </div>
+
+      <div class="settings">
+        <button id="refresh-btn">Refresh Assessment</button>
+        <div class="toggle-container">
+          <label for="active-toggle">Plugin Active</label>
+          <label class="switch">
+            <input type="checkbox" id="active-toggle" checked />
+            <span class="slider round"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

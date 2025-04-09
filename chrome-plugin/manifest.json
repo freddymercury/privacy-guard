@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "PrivacyGuard",
+  "version": "1.0.0",
+  "description": "Assesses privacy risks of user agreements for popular websites",
+  "permissions": ["activeTab", "storage", "tabs"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "PrivacyGuard"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["utils.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
