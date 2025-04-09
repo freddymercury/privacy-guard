@@ -50,3 +50,6 @@ coverage/
 *.tmp
 *.bak
 *.swp
+
+*/diff.txt
+diff.txt
