@@ -29,12 +29,72 @@ function isValidUrl(url) {
   }
 }
 
+// Fetch with timeout and retry
+async function fetchWithRetry(url, options = {}, retries = 2, timeout = 15000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  // Clone options to avoid modifying the original object
+  const optionsWithSignal = { ...options };
+  
+  // If options already has a signal, we need to handle it properly
+  if (options.signal) {
+    const originalSignal = options.signal;
+    // Create a handler that aborts the controller if either signal aborts
+    const handleAbort = () => controller.abort();
+    originalSignal.addEventListener('abort', handleAbort);
+    
+    // Clean up the event listener when we're done
+    const cleanup = () => originalSignal.removeEventListener('abort', handleAbort);
+    
+    // We'll need to clean up regardless of how this function exits
+    try {
+      optionsWithSignal.signal = controller.signal;
+      const response = await fetch(url, optionsWithSignal);
+      clearTimeout(timeoutId);
+      cleanup();
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      cleanup();
+      throw error;
+    }
+  } else {
+    // Simple case - just use our controller's signal
+    optionsWithSignal.signal = controller.signal;
+    
+    try {
+      const response = await fetch(url, optionsWithSignal);
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      
+      // Log more details about the error
+      if (error.name === 'AbortError') {
+        console.log(`[PrivacyGuard BG] Request to ${url} timed out after ${timeout}ms`);
+      } else if (error instanceof DOMException) {
+        console.log(`[PrivacyGuard BG] DOMException in fetch: ${error.name} - ${error.message}`);
+      }
+      
+      if (retries <= 0) throw error;
+
+      console.log(
+        `[PrivacyGuard BG] Retrying fetch to ${url}, ${retries} retries left`
+      );
+      // Wait a bit before retrying (exponential backoff)
+      await new Promise((resolve) => setTimeout(resolve, 1000 * (3 - retries)));
+      return fetchWithRetry(url, options, retries - 1, timeout);
+    }
+  }
+}
+
 // Query the service layer for privacy assessment
 async function checkPrivacyAssessment(url, tabId) {
   try {
-    // Extract domain from URL for assessment lookup
+    // Extract domain from URL for assessment lookup and remove 'www.' prefix
     const fullHostname = new URL(url).hostname;
-    const domain = getNormalizedDomain(fullHostname);
+    const domain = normalizeUrl(url); // Use normalizeUrl to ensure 'www.' is removed
     console.log(
       `[PrivacyGuard BG] Checking assessment for domain: ${fullHostname}, Normalized: ${domain}`
     );
@@ -45,9 +105,11 @@ async function checkPrivacyAssessment(url, tabId) {
         domain
       )}`
     );
-    const response = await fetch(
+
+    const response = await fetchWithRetry(
       `${API_BASE_URL}/assessment?url=${encodeURIComponent(domain)}`
     );
+
     const data = await response.json();
     console.log(`[PrivacyGuard BG] Assessment API response:`, data);
 
@@ -76,7 +138,8 @@ async function checkPrivacyAssessment(url, tabId) {
           console.log(
             `[PrivacyGuard BG] Triggering immediate assessment for ${domain}`
           );
-          const triggerResponse = await fetch(
+
+          const triggerResponse = await fetchWithRetry(
             `${API_BASE_URL}/trigger-assessment/${encodeURIComponent(domain)}`,
             {
               method: "POST",
@@ -109,10 +172,17 @@ async function checkPrivacyAssessment(url, tabId) {
             );
           }
         } catch (triggerError) {
-          console.error(
-            "[PrivacyGuard BG] Error triggering assessment:",
-            triggerError
-          );
+          // Provide more detailed error logging
+          if (triggerError instanceof DOMException) {
+            console.error(
+              `[PrivacyGuard BG] Error triggering assessment: DOMException - ${triggerError.name}: ${triggerError.message}`
+            );
+          } else {
+            console.error(
+              "[PrivacyGuard BG] Error triggering assessment:",
+              triggerError
+            );
+          }
         }
       }
     } else {
@@ -186,12 +256,13 @@ function updateIcon(tabId, riskLevel) {
 async function reportUnassessedUrl(domain) {
   try {
     // Domain should already be normalized at this point, but let's ensure it
-    const normalizedDomain = getNormalizedDomain(domain);
+    // Use normalizeUrl instead of getNormalizedDomain to ensure 'www.' is removed
+    const normalizedDomain = domain; // Already normalized by normalizeUrl in checkPrivacyAssessment
     console.log(
       `[PrivacyGuard BG] Reporting unassessed URL: ${domain}, Normalized: ${normalizedDomain}`
     );
 
-    await fetch(`${API_BASE_URL}/report-unassessed`, {
+    await fetchWithRetry(`${API_BASE_URL}/report-unassessed`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -199,9 +270,16 @@ async function reportUnassessedUrl(domain) {
       body: JSON.stringify({ url: normalizedDomain }),
     });
   } catch (error) {
-    console.error("Error reporting unassessed URL:", error);
+    console.error("[PrivacyGuard BG] Error reporting unassessed URL:", error);
+    // Continue execution even if reporting fails
   }
 }
 
 // Export functions for testing
-export { isValidUrl, checkPrivacyAssessment, updateIcon, reportUnassessedUrl };
+export {
+  isValidUrl,
+  checkPrivacyAssessment,
+  updateIcon,
+  reportUnassessedUrl,
+  fetchWithRetry,
+};

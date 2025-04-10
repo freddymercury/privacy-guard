@@ -172,9 +172,9 @@ if (typeof document !== "undefined") {
       return;
     }
 
-    // Get domain from URL
+    // Get domain from URL and remove 'www.' prefix
     const fullHostname = new URL(currentUrl).hostname;
-    const domain = getNormalizedDomain(fullHostname);
+    const domain = normalizeUrl(currentUrl); // Use normalizeUrl to ensure 'www.' is removed
     console.log(
       `[PrivacyGuard] URL: ${currentUrl}, Hostname: ${fullHostname}, Normalized Domain: ${domain}`
     );
@@ -318,14 +318,38 @@ function updateBadge(tabId, riskLevel) {
   chrome.action.setBadgeBackgroundColor({ tabId, color: badgeColor });
 }
 
+// Fetch with timeout and retry
+async function fetchWithRetry(url, options = {}, retries = 2, timeout = 5000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  options.signal = controller.signal;
+
+  try {
+    const response = await fetch(url, options);
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (retries <= 0) throw error;
+
+    console.log(
+      `[PrivacyGuard] Retrying fetch to ${url}, ${retries} retries left`
+    );
+    // Wait a bit before retrying (exponential backoff)
+    await new Promise((resolve) => setTimeout(resolve, 1000 * (3 - retries)));
+    return fetchWithRetry(url, options, retries - 1, timeout);
+  }
+}
+
 // Query the service layer for privacy assessment (similar to background.js)
 async function checkPrivacyAssessment(url, tabId) {
   const API_BASE_URL = "http://localhost:3000/api"; // Should match background.js
 
   try {
-    // Extract domain from URL for assessment lookup
+    // Extract domain from URL for assessment lookup and remove 'www.' prefix
     const fullHostname = new URL(url).hostname;
-    const domain = getNormalizedDomain(fullHostname);
+    const domain = normalizeUrl(url); // Use normalizeUrl to ensure 'www.' is removed
     console.log(
       `[PrivacyGuard] Checking assessment for domain: ${fullHostname}, Normalized: ${domain}`
     );
@@ -336,7 +360,7 @@ async function checkPrivacyAssessment(url, tabId) {
         domain
       )}`
     );
-    const response = await fetch(
+    const response = await fetchWithRetry(
       `${API_BASE_URL}/assessment?url=${encodeURIComponent(domain)}`
     );
     const data = await response.json();
@@ -363,7 +387,7 @@ async function checkPrivacyAssessment(url, tabId) {
 
         // Report URL for future assessment
         console.log(`[PrivacyGuard] Reporting ${domain} as unassessed`);
-        const reportResponse = await fetch(
+        const reportResponse = await fetchWithRetry(
           `${API_BASE_URL}/report-unassessed`,
           {
             method: "POST",
@@ -381,7 +405,7 @@ async function checkPrivacyAssessment(url, tabId) {
           console.log(
             `[PrivacyGuard] Triggering immediate assessment for ${domain}`
           );
-          const triggerResponse = await fetch(
+          const triggerResponse = await fetchWithRetry(
             `${API_BASE_URL}/trigger-assessment/${encodeURIComponent(domain)}`,
             {
               method: "POST",

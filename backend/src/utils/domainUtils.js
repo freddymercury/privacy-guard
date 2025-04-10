@@ -29,6 +29,7 @@ function getNormalizedDomain(hostname) {
     "co.uk",
     "com.au",
     "co.jp",
+    "co.kr",
     "org.uk",
     "gov.uk",
     "ac.uk",

@@ -3,6 +3,7 @@
 
 const db = require("../utils/db");
 const llmService = require("./llmService");
+const { normalizeUrl } = require("../utils/domainUtils");
 const axios = require("axios");
 const crypto = require("crypto");
 
@@ -359,7 +360,7 @@ async function locateUserAgreement(baseUrl) {
     const { data: unassessedEntry } = await db.supabase
       .from("unassessed_urls")
       .select("suggested_policy_urls")
-      .eq("url", db.normalizeUrl(baseUrl))
+      .eq("url", normalizeUrl(baseUrl))
       .single();
 
     if (

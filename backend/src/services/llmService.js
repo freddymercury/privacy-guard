@@ -61,6 +61,28 @@ const RISK_LEVELS = {
 };
 
 /**
+ * More accurate token estimation function
+ * @param {string} text - Text to estimate tokens for
+ * @returns {number} - Estimated token count
+ */
+const estimateTokens = (text) => {
+  // Even more conservative estimation:
+  // 1. Count words and multiply by 1.5 for punctuation/spaces
+  // 2. Add 30% buffer for safety (increased from 20%)
+  // 3. Add a constant for potential special tokens
+  // 4. Account for non-English characters which may use more tokens
+  const wordCount = text.split(/\s+/).length;
+  const charCount = text.length;
+  
+  // If the average word length is high, it might contain non-English characters
+  // which typically use more tokens per character
+  const avgWordLength = charCount / (wordCount || 1);
+  const nonEnglishFactor = avgWordLength > 6 ? 1.2 : 1.0;
+  
+  return Math.ceil(wordCount * 1.5 * 1.3 * nonEnglishFactor) + 50;
+};
+
+/**
  * Split text into chunks of approximately the specified size
  * @param {string} text - Text to split
  * @param {number} maxChunkSize - Maximum chunk size in characters
@@ -73,15 +95,59 @@ const splitTextIntoChunks = (text, maxChunkSize = 3000) => {
   let currentChunk = "";
 
   for (const paragraph of paragraphs) {
-    // If adding this paragraph would exceed the chunk size, start a new chunk
-    if (
-      currentChunk.length + paragraph.length > maxChunkSize &&
-      currentChunk.length > 0
-    ) {
-      chunks.push(currentChunk);
-      currentChunk = paragraph;
+    // If this paragraph alone exceeds the chunk size, we need to split it further
+    if (paragraph.length > maxChunkSize) {
+      // If we have accumulated text in the current chunk, add it first
+      if (currentChunk.length > 0) {
+        chunks.push(currentChunk);
+        currentChunk = "";
+      }
+      
+      // Split the long paragraph into sentences
+      const sentences = paragraph.split(/(?<=[.!?])\s+/);
+      
+      for (const sentence of sentences) {
+        // If this sentence alone exceeds the chunk size, split it by words
+        if (sentence.length > maxChunkSize) {
+          const words = sentence.split(/\s+/);
+          let sentenceChunk = "";
+          
+          for (const word of words) {
+            if (sentenceChunk.length + word.length + 1 > maxChunkSize) {
+              chunks.push(sentenceChunk);
+              sentenceChunk = word;
+            } else {
+              sentenceChunk += (sentenceChunk.length > 0 ? " " : "") + word;
+            }
+          }
+          
+          // Add the last sentence chunk if not empty
+          if (sentenceChunk.length > 0) {
+            if (currentChunk.length + sentenceChunk.length + 2 <= maxChunkSize) {
+              currentChunk += (currentChunk.length > 0 ? "\n\n" : "") + sentenceChunk;
+            } else {
+              chunks.push(currentChunk);
+              currentChunk = sentenceChunk;
+            }
+          }
+        } else {
+          // Normal sentence handling
+          if (currentChunk.length + sentence.length + 2 > maxChunkSize) {
+            chunks.push(currentChunk);
+            currentChunk = sentence;
+          } else {
+            currentChunk += (currentChunk.length > 0 ? " " : "") + sentence;
+          }
+        }
+      }
     } else {
-      currentChunk += (currentChunk.length > 0 ? "\n\n" : "") + paragraph;
+      // Normal paragraph handling
+      if (currentChunk.length + paragraph.length + 2 > maxChunkSize) {
+        chunks.push(currentChunk);
+        currentChunk = paragraph;
+      } else {
+        currentChunk += (currentChunk.length > 0 ? "\n\n" : "") + paragraph;
+      }
     }
   }
 
@@ -91,20 +157,6 @@ const splitTextIntoChunks = (text, maxChunkSize = 3000) => {
   }
 
   return chunks;
-};
-
-/**
- * More accurate token estimation function
- * @param {string} text - Text to estimate tokens for
- * @returns {number} - Estimated token count
- */
-const estimateTokens = (text) => {
-  // More conservative estimation:
-  // 1. Count words and multiply by 1.5 for punctuation/spaces
-  // 2. Add 20% buffer for safety
-  // 3. Add a constant for potential special tokens
-  const wordCount = text.split(/\s+/).length;
-  return Math.ceil(wordCount * 1.5 * 1.2) + 20;
 };
 
 /**
@@ -156,72 +208,6 @@ const callLLMWithRetry = async (
         throw error;
       }
     }
-  }
-};
-
-/**
- * Assess privacy policy text
- * @param {string} policyText - The privacy policy text to assess
- * @returns {Promise<Object>} - Assessment results
- */
-const assessPrivacyPolicy = async (policyText) => {
-  try {
-    // Use more accurate token estimation
-    const estimatedTokens = estimateTokens(policyText);
-    const textLength = policyText.length;
-
-    // Always use chunking for policies over 10,000 characters, regardless of token estimate
-    // This is a more conservative approach to avoid rate limits
-    if (estimatedTokens < 8000 && textLength < 10000) {
-      console.log(
-        `Processing policy directly (est. ${estimatedTokens} tokens, ${textLength} chars)`
-      );
-      const prompt = createAssessmentPrompt(policyText);
-      const response = await callLLMWithRetry(prompt);
-      return parseAssessmentResponse(response.text);
-    }
-
-    // For larger policies, split into chunks and process each chunk
-    console.log(
-      `Policy text is large (est. ${Math.round(
-        estimatedTokens
-      )} tokens, ${textLength} chars), splitting into chunks`
-    );
-
-    // Split text into smaller chunks (target ~4000 tokens per chunk)
-    const chunks = splitTextIntoChunks(policyText, 4000 * 4); // 4000 tokens ≈ 16000 chars
-    console.log(`Split policy into ${chunks.length} chunks`);
-
-    // Process each chunk
-    const chunkAssessments = [];
-    for (let i = 0; i < chunks.length; i++) {
-      console.log(`Processing chunk ${i + 1}/${chunks.length}`);
-      const chunkPrompt = createChunkAssessmentPrompt(
-        chunks[i],
-        i + 1,
-        chunks.length
-      );
-
-      // Use retry logic for each chunk
-      const chunkResponse = await callLLMWithRetry(chunkPrompt);
-      const chunkAssessment = parseAssessmentResponse(chunkResponse.text);
-      chunkAssessments.push(chunkAssessment);
-
-      // Add a longer delay between chunks to avoid rate limiting
-      if (i < chunks.length - 1) {
-        const delayMs = 5000; // 5 seconds
-        console.log(
-          `Adding ${delayMs}ms delay between chunk processing to avoid rate limits`
-        );
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
-      }
-    }
-
-    // Combine chunk assessments into a final assessment
-    return combineChunkAssessments(chunkAssessments);
-  } catch (error) {
-    console.error("Error assessing privacy policy:", error);
-    throw new Error("Failed to assess privacy policy");
   }
 };
 
@@ -294,11 +280,202 @@ Respond with JSON:
 };
 
 /**
+ * Compute SHA-256 hash of text
+ * @param {string} text - Text to hash
+ * @returns {string} - SHA-256 hash
+ */
+const computeTextHash = (text) => {
+  const crypto = require("crypto");
+  return crypto.createHash("sha256").update(text).digest("hex");
+};
+
+/**
+ * Extract text content from HTML
+ * @param {string} html - HTML content
+ * @returns {string} - Extracted text
+ */
+function extractTextFromHtml(html) {
+  // Simple HTML to text conversion
+  let text = html;
+
+  // Remove scripts
+  text = text.replace(
+    /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
+    " "
+  );
+
+  // Remove styles
+  text = text.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, " ");
+
+  // Remove HTML tags
+  text = text.replace(/<[^>]*>/g, " ");
+
+  // Normalize whitespace
+  text = text.replace(/\s+/g, " ").trim();
+
+  return text;
+}
+
+// Exported service object
+const llmService = {
+  RISK_LEVELS,
+  PRIVACY_CATEGORIES,
+  estimateTokens,
+  splitTextIntoChunks,
+  computeTextHash,
+  
+  // Assess privacy policy with improved chunking
+  async assessPrivacyPolicy(policyText) {
+    try {
+      // Use more accurate token estimation
+      const estimatedTokens = estimateTokens(policyText);
+      const textLength = policyText.length;
+
+      // Always use chunking for policies over 7,000 characters or 2,000 tokens
+      // This is a more conservative approach to avoid context length errors
+      if (estimatedTokens < 2000 && textLength < 7000) {
+        console.log(
+          `Processing policy directly (est. ${estimatedTokens} tokens, ${textLength} chars)`
+        );
+        const prompt = createAssessmentPrompt(policyText);
+        const response = await callLLMWithRetry(prompt);
+        return parseAssessmentResponse(response.text);
+      }
+
+      // For larger policies, split into chunks and process each chunk
+      console.log(
+        `Policy text is large (est. ${Math.round(
+          estimatedTokens
+        )} tokens, ${textLength} chars), splitting into chunks`
+      );
+
+      // Split text into smaller chunks (target ~2000 tokens per chunk)
+      // 2000 tokens ≈ 8000 chars (reduced from 16000 chars)
+      const chunks = splitTextIntoChunks(policyText, 2000 * 4);
+      console.log(`Split policy into ${chunks.length} chunks`);
+
+      // Process each chunk
+      const chunkAssessments = [];
+      for (let i = 0; i < chunks.length; i++) {
+        console.log(`Processing chunk ${i + 1}/${chunks.length}`);
+        const chunkPrompt = createChunkAssessmentPrompt(
+          chunks[i],
+          i + 1,
+          chunks.length
+        );
+
+        // Use retry logic for each chunk
+        const chunkResponse = await callLLMWithRetry(chunkPrompt);
+        const chunkAssessment = parseAssessmentResponse(chunkResponse.text);
+        chunkAssessments.push(chunkAssessment);
+
+        // Add a longer delay between chunks to avoid rate limiting
+        if (i < chunks.length - 1) {
+          const delayMs = 5000; // 5 seconds
+          console.log(
+            `Adding ${delayMs}ms delay between chunk processing to avoid rate limits`
+          );
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
+      }
+
+      // Combine chunk assessments into a final assessment
+      return combineChunkAssessments(chunkAssessments);
+    } catch (error) {
+      console.error("Error assessing privacy policy:", error);
+      throw new Error("Failed to assess privacy policy");
+    }
+  }
+};
+
+// Add missing functions to the exported object
+llmService.extractUserAgreement = extractUserAgreement;
+llmService.callLLMWithRetry = callLLMWithRetry;
+
+/**
+ * Parse LLM response into structured assessment
+ * @param {string} responseText - LLM response text
+ * @returns {Object} - Structured assessment
+ */
+function parseAssessmentResponse(responseText) {
+  try {
+    // Extract JSON from response (in case there's additional text)
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error("No valid JSON found in response");
+    }
+
+    const assessment = JSON.parse(jsonMatch[0]);
+
+    // Validate assessment structure
+    if (
+      !assessment.categories ||
+      !assessment.overallRisk ||
+      !assessment.summary
+    ) {
+      throw new Error("Invalid assessment structure");
+    }
+
+    // Normalize risk levels
+    for (const category in assessment.categories) {
+      const riskLevel = assessment.categories[category].risk;
+      assessment.categories[category].risk = normalizeRiskLevel(riskLevel);
+    }
+
+    assessment.overallRisk = normalizeRiskLevel(assessment.overallRisk);
+
+    return {
+      categories: assessment.categories,
+      riskLevel: assessment.overallRisk,
+      summary: assessment.summary,
+    };
+  } catch (error) {
+    console.error("Error parsing assessment response:", error);
+    throw new Error("Failed to parse assessment response");
+  }
+}
+
+/**
+ * Normalize risk level to standard values
+ * @param {string} riskLevel - Risk level from LLM
+ * @returns {string} - Normalized risk level
+ */
+function normalizeRiskLevel(riskLevel) {
+  const level = riskLevel.toLowerCase();
+
+  if (level.includes("high")) return RISK_LEVELS.HIGH;
+  if (level.includes("medium") || level.includes("moderate"))
+    return RISK_LEVELS.MEDIUM;
+  if (level.includes("low")) return RISK_LEVELS.LOW;
+
+  return RISK_LEVELS.UNKNOWN;
+}
+
+/**
+ * Get priority value for risk levels (for comparison)
+ * @param {string} riskLevel - Risk level
+ * @returns {number} - Priority value (higher = more severe)
+ */
+function getRiskPriority(riskLevel) {
+  switch (riskLevel) {
+    case RISK_LEVELS.HIGH:
+      return 3;
+    case RISK_LEVELS.MEDIUM:
+      return 2;
+    case RISK_LEVELS.LOW:
+      return 1;
+    case RISK_LEVELS.UNKNOWN:
+    default:
+      return 0;
+  }
+}
+
+/**
  * Combine multiple chunk assessments into a final assessment
  * @param {Array<Object>} chunkAssessments - Array of chunk assessments
  * @returns {Object} - Combined assessment
  */
-const combineChunkAssessments = (chunkAssessments) => {
+function combineChunkAssessments(chunkAssessments) {
   // Initialize combined categories with Unknown risk
   const combinedCategories = {};
   for (const category of PRIVACY_CATEGORIES) {
@@ -371,124 +548,10 @@ const combineChunkAssessments = (chunkAssessments) => {
     riskLevel: overallRisk,
     summary: summary,
   };
-};
+}
 
-/**
- * Get priority value for risk levels (for comparison)
- * @param {string} riskLevel - Risk level
- * @returns {number} - Priority value (higher = more severe)
- */
-const getRiskPriority = (riskLevel) => {
-  switch (riskLevel) {
-    case RISK_LEVELS.HIGH:
-      return 3;
-    case RISK_LEVELS.MEDIUM:
-      return 2;
-    case RISK_LEVELS.LOW:
-      return 1;
-    case RISK_LEVELS.UNKNOWN:
-    default:
-      return 0;
-  }
-};
-
-/**
- * Parse LLM response into structured assessment
- * @param {string} responseText - LLM response text
- * @returns {Object} - Structured assessment
- */
-const parseAssessmentResponse = (responseText) => {
-  try {
-    // Extract JSON from response (in case there's additional text)
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("No valid JSON found in response");
-    }
-
-    const assessment = JSON.parse(jsonMatch[0]);
-
-    // Validate assessment structure
-    if (
-      !assessment.categories ||
-      !assessment.overallRisk ||
-      !assessment.summary
-    ) {
-      throw new Error("Invalid assessment structure");
-    }
-
-    // Normalize risk levels
-    for (const category in assessment.categories) {
-      const riskLevel = assessment.categories[category].risk;
-      assessment.categories[category].risk = normalizeRiskLevel(riskLevel);
-    }
-
-    assessment.overallRisk = normalizeRiskLevel(assessment.overallRisk);
-
-    return {
-      categories: assessment.categories,
-      riskLevel: assessment.overallRisk,
-      summary: assessment.summary,
-    };
-  } catch (error) {
-    console.error("Error parsing assessment response:", error);
-    throw new Error("Failed to parse assessment response");
-  }
-};
-
-/**
- * Normalize risk level to standard values
- * @param {string} riskLevel - Risk level from LLM
- * @returns {string} - Normalized risk level
- */
-const normalizeRiskLevel = (riskLevel) => {
-  const level = riskLevel.toLowerCase();
-
-  if (level.includes("high")) return RISK_LEVELS.HIGH;
-  if (level.includes("medium") || level.includes("moderate"))
-    return RISK_LEVELS.MEDIUM;
-  if (level.includes("low")) return RISK_LEVELS.LOW;
-
-  return RISK_LEVELS.UNKNOWN;
-};
-
-/**
- * Common paths to try for finding user agreements
- */
-const COMMON_AGREEMENT_PATHS = [
-  "/privacy",
-  "/terms",
-  "/privacy-policy",
-  "/legal/privacy-policy",
-  "/legal/privacy",
-  "/legal/terms",
-  "/about/privacy",
-  "/about/terms",
-  "/privacy-notice",
-  "/data-policy",
-];
-
-/**
- * Google-specific paths to try for finding user agreements
- */
-const GOOGLE_AGREEMENT_PATHS = [
-  "/policies/privacy",
-  "/policies/terms",
-  "/policies",
-  "/intl/en/policies/privacy",
-  "/intl/en/policies/terms",
-  "/intl/en/privacy",
-  "/intl/en/terms",
-  "/about/policies",
-  "/about/privacy",
-  "/about/terms",
-];
-
-/**
- * Extract user agreement text from a website
- * @param {string} url - Website URL
- * @returns {Promise<Object>} - Extracted text and hash
- */
-const extractUserAgreement = async (url) => {
+// Add extractUserAgreement function with proper implementation
+async function extractUserAgreement(url) {
   try {
     // Normalize URL
     let normalizedUrl = url;
@@ -669,143 +732,6 @@ We collect information to provide better services to all our users — from figu
     console.error("Error extracting user agreement:", error);
     throw new Error(`Failed to extract user agreement: ${error.message}`);
   }
-};
-
-/**
- * Extract text content from HTML
- * @param {string} html - HTML content
- * @returns {string} - Extracted text
- */
-function extractTextFromHtml(html) {
-  // Simple HTML to text conversion
-  let text = html;
-
-  // Remove scripts
-  text = text.replace(
-    /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
-    " "
-  );
-
-  // Remove styles
-  text = text.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, " ");
-
-  // Remove HTML tags
-  text = text.replace(/<[^>]*>/g, " ");
-
-  // Normalize whitespace
-  text = text.replace(/\s+/g, " ").trim();
-
-  return text;
 }
-
-/**
- * Compute SHA-256 hash of text
- * @param {string} text - Text to hash
- * @returns {string} - SHA-256 hash
- */
-const computeTextHash = (text) => {
-  const crypto = require("crypto");
-  return crypto.createHash("sha256").update(text).digest("hex");
-};
-
-// Exported service object
-const llmService = {
-  RISK_LEVELS,
-  PRIVACY_CATEGORIES,
-  estimateTokens,
-  splitTextIntoChunks,
-  getRiskPriority,
-  // Move assessPrivacyPolicy inside the exported object
-  async assessPrivacyPolicy(policyText) {
-    try {
-      // Use more accurate token estimation
-      const estimatedTokens = estimateTokens(policyText);
-      const textLength = policyText.length;
-
-      // Always use chunking for policies over 10,000 characters, regardless of token estimate
-      // This is a more conservative approach to avoid rate limits
-      if (estimatedTokens < 8000 && textLength < 10000) {
-        console.log(
-          `Processing policy directly (est. ${estimatedTokens} tokens, ${textLength} chars)`
-        );
-        const prompt = createAssessmentPrompt(policyText);
-        const response = await callLLMWithRetry(prompt);
-        return parseAssessmentResponse(response.text);
-      }
-
-      // For larger policies, split into chunks and process each chunk
-      console.log(
-        `Policy text is large (est. ${Math.round(
-          estimatedTokens
-        )} tokens, ${textLength} chars), splitting into chunks`
-      );
-
-      // Split text into smaller chunks (target ~4000 tokens per chunk)
-      const chunks = splitTextIntoChunks(policyText, 4000 * 4); // 4000 tokens ≈ 16000 chars
-      console.log(`Split policy into ${chunks.length} chunks`);
-
-      // Process each chunk
-      const chunkAssessments = [];
-      for (let i = 0; i < chunks.length; i++) {
-        console.log(`Processing chunk ${i + 1}/${chunks.length}`);
-        const chunkPrompt = createChunkAssessmentPrompt(
-          chunks[i],
-          i + 1,
-          chunks.length
-        );
-
-        // Use retry logic for each chunk
-        const chunkResponse = await callLLMWithRetry(chunkPrompt);
-        const chunkAssessment = parseAssessmentResponse(chunkResponse.text);
-        chunkAssessments.push(chunkAssessment);
-
-        // Add a longer delay between chunks to avoid rate limiting
-        if (i < chunks.length - 1) {
-          const delayMs = 5000; // 5 seconds
-          console.log(
-            `Adding ${delayMs}ms delay between chunk processing to avoid rate limits`
-          );
-          await new Promise((resolve) => setTimeout(resolve, delayMs));
-        }
-      }
-
-      // Combine chunk assessments into a final assessment
-      return combineChunkAssessments(chunkAssessments);
-    } catch (error) {
-      console.error("Error assessing privacy policy:", error);
-      throw new Error("Failed to assess privacy policy");
-    }
-  },
-  async analyzePrivacyPolicy(url, policyText) {
-    if (!url) {
-      throw new Error('URL is required');
-    }
-    if (!policyText) {
-      throw new Error('Policy text is required');
-    }
-
-    // Check if assessment already exists
-    const existingAssessment = await db.getAssessment(url);
-    if (existingAssessment) {
-      return existingAssessment;
-    }
-
-    // Call the internal method using 'this'
-    const assessment = await this.assessPrivacyPolicy(policyText);
-
-    // Save the assessment
-    const savedAssessment = await db.upsertAssessment({
-      url,
-      content: policyText,
-      analysis: assessment
-    });
-
-    return savedAssessment;
-  },
-  extractUserAgreement,
-  computeTextHash,
-  callLLMWithRetry,
-  combineChunkAssessments,
-};
 
 module.exports = llmService;

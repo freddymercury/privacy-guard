@@ -55,14 +55,21 @@ function getNormalizedDomain(hostname) {
  */
 function normalizeUrl(url) {
   try {
-    // If the URL doesn't start with http:// or https://, add https://
-    let normalizedUrl = url;
-    if (!url.startsWith("http://") && !url.startsWith("https://")) {
-      normalizedUrl = "https://" + url;
+    // Handle null, undefined, or empty strings
+    if (!url) {
+      return '';
     }
 
-    // Extract the hostname from the URL
-    const hostname = new URL(normalizedUrl).hostname;
+    // Remove any whitespace
+    let normalizedUrl = url.trim();
+
+    // If the URL doesn't start with http:// or https://, add https://
+    if (!normalizedUrl.match(/^https?:\/\//i)) {
+      normalizedUrl = "https://" + normalizedUrl;
+    }
+
+    // Extract the hostname from the URL and remove 'www.' if present
+    const hostname = new URL(normalizedUrl).hostname.replace(/^www\./, '');
 
     // Get the normalized domain
     return getNormalizedDomain(hostname);
