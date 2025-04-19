@@ -610,6 +610,21 @@
         <div class="modal-body">
           <p>Are you sure you want to process all unassessed URLs?</p>
           <p>This will trigger the assessment process for all pending URLs in the queue.</p>
+          
+          <div style="margin-top: 15px;">
+            <label for="concurrent-limit" style="display: block; margin-bottom: 5px;">Maximum concurrent assessments:</label>
+            <input 
+              type="number" 
+              id="concurrent-limit" 
+              min="1" 
+              max="10" 
+              value="1" 
+              style="padding: 8px; border-radius: 4px; border: 1px solid #ddd; width: 100%;"
+            >
+            <small style="display: block; margin-top: 5px; color: #666;">
+              Limit the number of concurrent assessments to avoid rate limiting (default: 1)
+            </small>
+          </div>
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" id="cancel-process-all">Cancel</button>
@@ -744,11 +759,17 @@
         });
 
         document.getElementById('confirm-process-all').addEventListener('click', function() {
+          // Get the concurrency limit value
+          const concurrentLimit = document.getElementById('concurrent-limit').value;
+          
           fetch('/admin/trigger-assessments', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
-            }
+            },
+            body: JSON.stringify({
+              concurrentLimit: parseInt(concurrentLimit)
+            })
           })
           .then(response => response.json())
           .then(data => {

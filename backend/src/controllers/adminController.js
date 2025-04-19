@@ -1113,17 +1113,21 @@ const deleteUser = async (req, res) => {
  */
 const triggerAllAssessments = async (req, res) => {
   try {
+    // Get concurrency limit from request or use default
+    const concurrentLimit = req.body.concurrentLimit || process.env.MAX_CONCURRENT_ASSESSMENTS || 2;
+    
     // Create audit log entry
     await db.createAuditLog({
       action: "trigger_all_assessments",
       user_id: req.session.user.id,
       details: {
         initiatedBy: req.session.user.username,
+        concurrentLimit: concurrentLimit
       },
     });
 
-    // Process all unassessed URLs
-    const results = await assessmentTriggerService.processUnassessedUrls();
+    // Process all unassessed URLs with the specified concurrency limit
+    const results = await assessmentTriggerService.processUnassessedUrls(parseInt(concurrentLimit));
 
     return res.status(200).json({
       status: "success",

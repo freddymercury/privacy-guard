@@ -49,6 +49,7 @@ Note: Make sure to create the `.env` file in the `backend` directory, not in the
    - Set `SESSION_SECRET` to a secure random string
    - Set `SUPABASE_URL` and `SUPABASE_KEY` to your Supabase project credentials
    - Set `OPENAI_API_KEY` to your OpenAI API key
+   - Set `LLM_MODEL` to model of your choice - tested using `gpt-4o-mini`
 
 5. Set up Supabase:
 
@@ -158,14 +159,33 @@ The server will run on port 3000 by default (configurable in `.env`).
 
 ### Assessment Trigger Service
 
-The assessment trigger service starts automatically when the application is launched. By default, it runs every 60 minutes to process unassessed URLs in the queue.
+The assessment trigger service starts automatically when the application is launched. By default, it runs every 600 minutes (10 hours) to process unassessed URLs in the queue.
 
-You can configure the processing interval by setting the `ASSESSMENT_TRIGGER_INTERVAL_MINUTES` environment variable in your `.env` file:
+You can configure the service using the following environment variables in your `.env` file:
 
 ```
-# Assessment trigger interval in minutes (default: 60)
-ASSESSMENT_TRIGGER_INTERVAL_MINUTES=30
+# Assessment trigger interval in minutes (default: 600)
+ASSESSMENT_TRIGGER_INTERVAL_MINUTES=600
+
+# Maximum number of concurrent URL assessments (default: 1)
+MAX_CONCURRENT_ASSESSMENTS=1
 ```
+
+The `MAX_CONCURRENT_ASSESSMENTS` setting controls how many URL assessments can run simultaneously, which helps prevent rate limiting issues with external APIs. The default value is 1 to avoid rate limits, but you can adjust this based on your API rate limits and system resources.
+
+#### Rate Limiting Considerations
+
+The system uses OpenAI's API for assessing privacy policies, which has rate limits. To avoid hitting these limits:
+
+1. The default concurrency is set to 1 assessment at a time
+2. There's a tracking mechanism to prevent duplicate processing of the same URL
+3. The system adds delays between processing chunks of large privacy policies
+4. Exponential backoff is implemented for retry attempts when rate limits are hit
+
+If you're still experiencing rate limit issues, consider:
+- Reducing the batch size of URLs processed at once
+- Increasing the delay between chunk processing (currently 10 seconds)
+- Using a different API key with higher rate limits
 
 #### Manual Triggering
 
