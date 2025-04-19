@@ -164,24 +164,32 @@ const splitTextIntoChunks = (text, maxChunkSize = 3000) => {
  * @param {string} prompt - The prompt to send to the LLM
  * @param {number} maxRetries - Maximum number of retry attempts
  * @param {number} initialDelay - Initial delay in ms before retrying
+ * @param {Object} context - Additional context for logging (domain, chunk info)
  * @returns {Promise<Object>} - LLM response
  */
 const callLLMWithRetry = async (
   prompt,
   maxRetries = 5,
-  initialDelay = 5000
+  initialDelay = 5000,
+  context = {}
 ) => {
   let attempt = 0;
   let delay = initialDelay;
+  const { domain = "unknown", chunkInfo = "" } = context;
+
+  // Log context information
+  const contextStr = chunkInfo ? `${domain} (${chunkInfo})` : domain;
+  console.log(`[LLM Service] Starting assessment for ${contextStr}`);
 
   while (attempt <= maxRetries) {
     try {
-      console.log(`LLM API call attempt ${attempt + 1}/${maxRetries + 1}`);
+      console.log(`[LLM Service] API call attempt ${attempt + 1}/${maxRetries + 1} for ${contextStr}`);
       const response = await llm.complete({
         prompt,
         temperature: 0.2,
         maxTokens: 1500, // Reduced from 2000
       });
+      console.log(`[LLM Service] Successfully completed API call for ${contextStr}`);
       return response;
     } catch (error) {
       attempt++;
@@ -192,19 +200,20 @@ const callLLMWithRetry = async (
           (error.error && error.error.code === "rate_limit_exceeded")) &&
         attempt <= maxRetries
       ) {
-        console.log(`Rate limit hit, retrying in ${delay}ms...`);
+        console.log(`[LLM Service] Rate limit hit for ${contextStr}, retrying in ${delay}ms...`);
         await new Promise((resolve) => setTimeout(resolve, delay));
         delay *= 2; // Exponential backoff
       } else if (attempt <= maxRetries) {
         // For other errors, retry with less backoff
         console.log(
-          `API error: ${
+          `[LLM Service] API error for ${contextStr}: ${
             error.message || "Unknown error"
           }, retrying in ${initialDelay}ms...`
         );
         await new Promise((resolve) => setTimeout(resolve, initialDelay));
       } else {
         // No more retries, throw the error
+        console.log(`[LLM Service] Failed all retry attempts for ${contextStr}`);
         throw error;
       }
     }
@@ -214,9 +223,10 @@ const callLLMWithRetry = async (
 /**
  * Create assessment prompt for LLM
  * @param {string} policyText - The privacy policy text
+ * @param {string} domain - The domain being assessed
  * @returns {string} - Formatted prompt
  */
-const createAssessmentPrompt = (policyText) => {
+const createAssessmentPrompt = (policyText, domain = "unknown") => {
   return `Analyze this privacy policy and assess risks for users.
 
 Categories to evaluate (High/Medium/Low/Unknown risk):
@@ -249,9 +259,10 @@ Respond with JSON:
  * @param {string} chunkText - The chunk of privacy policy text
  * @param {number} chunkNumber - Current chunk number
  * @param {number} totalChunks - Total number of chunks
+ * @param {string} domain - The domain being assessed
  * @returns {string} - Formatted prompt
  */
-const createChunkAssessmentPrompt = (chunkText, chunkNumber, totalChunks) => {
+const createChunkAssessmentPrompt = (chunkText, chunkNumber, totalChunks, domain = "unknown") => {
   return `Analyze CHUNK ${chunkNumber}/${totalChunks} of this privacy policy.
 
 Only assess categories addressed in this chunk (High/Medium/Low/Unknown risk):
@@ -325,7 +336,7 @@ const llmService = {
   computeTextHash,
   
   // Assess privacy policy with improved chunking
-  async assessPrivacyPolicy(policyText) {
+  async assessPrivacyPolicy(policyText, domain = "unknown") {
     try {
       // Use more accurate token estimation
       const estimatedTokens = estimateTokens(policyText);
@@ -335,16 +346,16 @@ const llmService = {
       // This is a more conservative approach to avoid context length errors
       if (estimatedTokens < 2000 && textLength < 7000) {
         console.log(
-          `Processing policy directly (est. ${estimatedTokens} tokens, ${textLength} chars)`
+          `[LLM Service] Processing policy for ${domain} directly (est. ${estimatedTokens} tokens, ${textLength} chars)`
         );
-        const prompt = createAssessmentPrompt(policyText);
-        const response = await callLLMWithRetry(prompt);
+        const prompt = createAssessmentPrompt(policyText, domain);
+        const response = await callLLMWithRetry(prompt, 5, 5000, { domain });
         return parseAssessmentResponse(response.text);
       }
 
       // For larger policies, split into chunks and process each chunk
       console.log(
-        `Policy text is large (est. ${Math.round(
+        `[LLM Service] Policy text for ${domain} is large (est. ${Math.round(
           estimatedTokens
         )} tokens, ${textLength} chars), splitting into chunks`
       );
@@ -352,28 +363,33 @@ const llmService = {
       // Split text into smaller chunks (target ~2000 tokens per chunk)
       // 2000 tokens ≈ 8000 chars (reduced from 16000 chars)
       const chunks = splitTextIntoChunks(policyText, 2000 * 4);
-      console.log(`Split policy into ${chunks.length} chunks`);
+      console.log(`[LLM Service] Split policy for ${domain} into ${chunks.length} chunks`);
 
       // Process each chunk
       const chunkAssessments = [];
       for (let i = 0; i < chunks.length; i++) {
-        console.log(`Processing chunk ${i + 1}/${chunks.length}`);
+        const chunkInfo = `chunk ${i + 1}/${chunks.length}`;
+        console.log(`[LLM Service] Processing ${chunkInfo} for ${domain}`);
         const chunkPrompt = createChunkAssessmentPrompt(
           chunks[i],
           i + 1,
-          chunks.length
+          chunks.length,
+          domain
         );
 
         // Use retry logic for each chunk
-        const chunkResponse = await callLLMWithRetry(chunkPrompt);
+        const chunkResponse = await callLLMWithRetry(chunkPrompt, 5, 5000, { 
+          domain, 
+          chunkInfo 
+        });
         const chunkAssessment = parseAssessmentResponse(chunkResponse.text);
         chunkAssessments.push(chunkAssessment);
 
         // Add a longer delay between chunks to avoid rate limiting
         if (i < chunks.length - 1) {
-          const delayMs = 5000; // 5 seconds
+          const delayMs = 10000; // 10 seconds (increased from 5)
           console.log(
-            `Adding ${delayMs}ms delay between chunk processing to avoid rate limits`
+            `[LLM Service] Adding ${delayMs}ms delay between chunk processing for ${domain} to avoid rate limits`
           );
           await new Promise((resolve) => setTimeout(resolve, delayMs));
         }

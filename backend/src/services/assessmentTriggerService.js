@@ -44,13 +44,92 @@ const GOOGLE_AGREEMENT_PATHS = [
  */
 const MAX_RETRY_ATTEMPTS = 3;
 
+// Global set to track URLs currently being processed
+const processingUrls = new Set();
+
 /**
- * Process all pending unassessed URLs
+ * Process a batch of URLs with concurrency control
+ * @param {Array} urls - Array of URL entries to process
+ * @param {number} concurrentLimit - Maximum number of concurrent assessments
  * @returns {Promise<Object>} - Processing results
  */
-async function processUnassessedUrls() {
+async function processBatchWithConcurrency(urls, concurrentLimit) {
+  const results = {
+    processed: 0,
+    successful: 0,
+    failed: 0,
+    notFound: 0,
+    skipped: 0,
+  };
+
+  // Create a queue of URLs to process
+  const queue = [...urls];
+  const inProgress = new Set();
+  
+  // Process URLs with concurrency control
+  while (queue.length > 0 || inProgress.size > 0) {
+    // Fill up to the concurrent limit
+    while (queue.length > 0 && inProgress.size < concurrentLimit) {
+      const urlEntry = queue.shift();
+      
+      // Skip if already being processed elsewhere
+      if (processingUrls.has(urlEntry.url)) {
+        console.log(`[AssessmentTrigger] Skipping ${urlEntry.url} - already being processed`);
+        results.skipped++;
+        results.processed++;
+        continue;
+      }
+      
+      // Add to tracking sets
+      inProgress.add(urlEntry.url);
+      processingUrls.add(urlEntry.url);
+      
+      // Process URL without awaiting to allow concurrency
+      processUnassessedUrl(urlEntry)
+        .then(result => {
+          // Update results based on the outcome
+          results.processed++;
+          
+          if (result.success) {
+            results.successful++;
+          } else if (result.status === "Not Found") {
+            results.notFound++;
+          } else {
+            results.failed++;
+          }
+        })
+        .catch(error => {
+          console.error(
+            `[AssessmentTrigger] Error processing URL ${urlEntry.url}:`,
+            error
+          );
+          results.processed++;
+          results.failed++;
+        })
+        .finally(() => {
+          // Remove from tracking sets when done
+          inProgress.delete(urlEntry.url);
+          processingUrls.delete(urlEntry.url);
+        });
+    }
+    
+    // Wait a short time before checking again if we're at the concurrency limit
+    if (inProgress.size >= concurrentLimit || (queue.length === 0 && inProgress.size > 0)) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+  
+  return results;
+}
+
+/**
+ * Process all pending unassessed URLs
+ * @param {number} concurrentLimit - Maximum number of concurrent assessments
+ * @returns {Promise<Object>} - Processing results
+ */
+async function processUnassessedUrls(concurrentLimit = 2) {
   try {
-    console.log("[AssessmentTrigger] Starting processing of unassessed URLs");
+    console.log(`[AssessmentTrigger] Starting processing of unassessed URLs (max concurrent: ${concurrentLimit})`);
 
     // Get pending unassessed URLs
     const unassessedUrls = await db.getUnassessedUrls("Pending");
@@ -71,30 +150,19 @@ async function processUnassessedUrls() {
       action: "assessment_trigger_started",
       details: {
         count: unassessedUrls.length,
+        concurrentLimit
       },
     });
 
-    // Process each URL
-    for (const urlEntry of unassessedUrls) {
-      try {
-        const result = await processUnassessedUrl(urlEntry);
-        results.processed++;
-
-        if (result.success) {
-          results.successful++;
-        } else if (result.status === "Not Found") {
-          results.notFound++;
-        } else {
-          results.failed++;
-        }
-      } catch (error) {
-        console.error(
-          `[AssessmentTrigger] Error processing URL ${urlEntry.url}:`,
-          error
-        );
-        results.processed++;
-        results.failed++;
-      }
+    // Process URLs with concurrency control
+    if (unassessedUrls.length > 0) {
+      const batchResults = await processBatchWithConcurrency(unassessedUrls, concurrentLimit);
+      
+      // Update the overall results
+      results.processed = batchResults.processed;
+      results.successful = batchResults.successful;
+      results.failed = batchResults.failed;
+      results.notFound = batchResults.notFound;
     }
 
     // Create audit log entry for process completion
@@ -267,7 +335,8 @@ async function processUnassessedUrl(urlEntry) {
 
     // Assess privacy policy
     const assessment = await llmService.assessPrivacyPolicy(
-      agreementResult.text
+      agreementResult.text,
+      url // Pass the domain/URL for better logging
     );
 
     // Save assessment to database
@@ -616,23 +685,24 @@ function extractTextFromHtml(html) {
 /**
  * Schedule periodic processing of unassessed URLs
  * @param {number} intervalMinutes - Interval in minutes
+ * @param {number} concurrentLimit - Maximum number of concurrent assessments
  * @returns {Object} - Timer object
  */
-function scheduleProcessing(intervalMinutes = 60) {
+function scheduleProcessing(intervalMinutes = 60, concurrentLimit = 2) {
   const intervalMs = intervalMinutes * 60 * 1000;
 
   console.log(
-    `[AssessmentTrigger] Scheduling processing every ${intervalMinutes} minutes`
+    `[AssessmentTrigger] Scheduling processing every ${intervalMinutes} minutes (max concurrent: ${concurrentLimit})`
   );
 
   // Run immediately
-  processUnassessedUrls().catch((error) => {
+  processUnassessedUrls(concurrentLimit).catch((error) => {
     console.error("[AssessmentTrigger] Error in initial processing:", error);
   });
 
   // Schedule periodic runs
   const timer = setInterval(() => {
-    processUnassessedUrls().catch((error) => {
+    processUnassessedUrls(concurrentLimit).catch((error) => {
       console.error(
         "[AssessmentTrigger] Error in scheduled processing:",
         error
@@ -652,16 +722,37 @@ async function processSingleUrl(url) {
   console.log(`[AssessmentTrigger] Processing single URL: ${url}`);
 
   try {
-    // Create a mock entry object for the URL
-    const urlEntry = { url };
+    // Check if URL is already being processed
+    if (processingUrls.has(url)) {
+      console.log(`[AssessmentTrigger] URL ${url} is already being processed, skipping`);
+      return {
+        success: false,
+        status: "Already Processing",
+        url,
+        message: "This URL is already being processed"
+      };
+    }
 
-    // Process this single URL using the existing function
-    return await processUnassessedUrl(urlEntry);
+    // Add URL to processing set
+    processingUrls.add(url);
+
+    try {
+      // Create a mock entry object for the URL
+      const urlEntry = { url };
+
+      // Process this single URL using the existing function
+      return await processUnassessedUrl(urlEntry);
+    } finally {
+      // Always remove from processing set when done
+      processingUrls.delete(url);
+    }
   } catch (error) {
     console.error(
       `[AssessmentTrigger] Error processing single URL ${url}:`,
       error
     );
+    // Make sure to remove from processing set even on error
+    processingUrls.delete(url);
     throw error;
   }
 }

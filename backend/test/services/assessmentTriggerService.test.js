@@ -57,7 +57,7 @@ describe("Assessment Trigger Service", () => {
   });
 
   describe("processUnassessedUrls", () => {
-    it("should process all pending unassessed URLs", async () => {
+    it("should process all pending unassessed URLs with default concurrency", async () => {
       // Setup
       const urls = [{ url }];
       db.getUnassessedUrls.mockResolvedValue(urls);
@@ -88,6 +88,34 @@ describe("Assessment Trigger Service", () => {
       });
     });
 
+    it("should process all pending unassessed URLs with custom concurrency", async () => {
+      // Setup
+      const urls = [{ url }, { url: "example2.com" }];
+      db.getUnassessedUrls.mockResolvedValue(urls);
+      db.getAssessment.mockResolvedValue(null);
+      axios.get.mockResolvedValue({ 
+        status: 200, 
+        data: longPrivacyPolicy
+      });
+      llmService.assessPrivacyPolicy.mockResolvedValue({
+        riskLevel: "low",
+        summary: "Good privacy policy"
+      });
+
+      // Execute with custom concurrency limit
+      const results = await assessmentTriggerService.processUnassessedUrls(1);
+
+      // Verify
+      expect(db.getUnassessedUrls).toHaveBeenCalled();
+      expect(db.createAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+        action: "assessment_trigger_started",
+        details: expect.objectContaining({
+          count: 2,
+          concurrentLimit: 1
+        })
+      }));
+    });
+
     it("should handle errors during processing", async () => {
       // Setup
       const urls = [{ url }];
@@ -95,7 +123,7 @@ describe("Assessment Trigger Service", () => {
       axios.get.mockRejectedValue(new Error("Test error"));
 
       // Execute
-      const results = await assessmentTriggerService.processUnassessedUrls();
+      const results = await assessmentTriggerService.processUnassessedUrls(2);
 
       // Verify
       expect(db.getUnassessedUrls).toHaveBeenCalled();

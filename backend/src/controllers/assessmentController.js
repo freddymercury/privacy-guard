@@ -83,10 +83,11 @@ const triggerAssessment = async (req, res) => {
 
       // Assess privacy policy
       console.log(
-        `[AssessmentController] Assessing privacy policy (text length: ${agreementData.text.length} chars)`
+        `[AssessmentController] Assessing privacy policy for ${url} (text length: ${agreementData.text.length} chars)`
       );
       const assessment = await llmService.assessPrivacyPolicy(
-        agreementData.text
+        agreementData.text,
+        url // Pass the domain/URL for better logging
       );
       console.log(
         `[AssessmentController] Assessment complete with risk level: ${assessment.riskLevel}`

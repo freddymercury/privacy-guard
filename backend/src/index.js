@@ -70,10 +70,12 @@ app.listen(PORT, () => {
   // Initialize assessment trigger service
   const intervalMinutes =
     process.env.ASSESSMENT_TRIGGER_INTERVAL_MINUTES || 600; // Changed from 60 to 600 (10 hours)
+  const maxConcurrentAssessments = 
+    process.env.MAX_CONCURRENT_ASSESSMENTS || 1; // Default to 1 concurrent assessment to avoid rate limits
   console.log(
-    `Initializing assessment trigger service with interval: ${intervalMinutes} minutes`
+    `Initializing assessment trigger service with interval: ${intervalMinutes} minutes, max concurrent assessments: ${maxConcurrentAssessments}`
   );
-  assessmentTriggerService.scheduleProcessing(parseInt(intervalMinutes));
+  assessmentTriggerService.scheduleProcessing(parseInt(intervalMinutes), parseInt(maxConcurrentAssessments));
 });
 
 module.exports = app; // Export for testing
